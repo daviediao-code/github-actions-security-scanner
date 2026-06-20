@@ -1,0 +1,51 @@
+name: 'Security Scanner'
+description: 'Scan for secrets, dependencies CVEs, and misconfigurations'
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  github_token:
+    description: 'GitHub token for API access'
+    required: true
+  scan_level:
+    description: 'Scan level (basic/advanced/full)'
+    required: false
+    default: 'advanced'
+  fail_on_severity:
+    description: 'Fail on severity (low/medium/high/critical)'
+    required: false
+    default: 'high'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH,MEDIUM'
+
+    - name: Run GitLeaks for secrets
+      uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+
+    - name: Run Secret Scanner
+      run: python .github/actions/security-scanner/scan_secrets.py
+      shell: python
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+    - name: Generate report
+      run: python .github/actions/security-scanner/generate_report.py
+      shell: python
